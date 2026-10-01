@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<!--
+  CUERNO NAVIDEÑO PARA MOTO KIT — index.html
+  Basado en la plantilla Tooplate 2150 Living Parallax
+  (https://www.tooplate.com/view/2150-living-parallax).
+
+  CÓMO ESTÁ ARMADA ESTA PÁGINA:
+  Es de una sola pantalla (el slider de fotos) con "paneles" que se abren
+  encima al hacer clic en el menú — no es una página que se desplaza hacia
+  abajo. Cada panel es un <div class="overlay" id="xxxOverlay"> en este
+  archivo, y se abre con onclick="openOverlay('xxx')" / se cierra con
+  closeOverlay('xxx'). Para agregar un panel nuevo: copia uno de los que
+  ya existen (ej. el de Envíos, que es el más simple), cámbiale el id,
+  el texto, y agrega su botón en el <nav> de más abajo.
+
+  ARCHIVOS RELACIONADOS:
+  - style.css   → todos los estilos y colores (con su propio índice al inicio)
+  - scripts.js  → toda la lógica: slider, paneles, menú, botones
+  - images/     → tus fotos (o los marcadores de posición, mientras tanto)
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuerno Navideño Para Moto Kit</title>
+    <!-- Fuente Poppins de Google Fonts (la tipografía de toda la página) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Botón del "ojito" (arriba a la derecha): oculta/muestra toda la
+         interfaz para ver la foto sin nada encima. También se activa con
+         la tecla H. El botón de Comprar NO se oculta a propósito. -->
+    <button class="ui-toggle-btn" id="uiToggleBtn" aria-label="Toggle UI Visibility">
+        <svg viewBox="0 0 24 24" id="eyeIcon">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </button>
+
+    <!-- ======= ENCABEZADO: logo + menú de navegación ======= 
+         Cada <a onclick="openOverlay('...')"> abre el panel con ese
+         mismo nombre + "Overlay" (los ves más abajo en este archivo).
+         Para agregar un ítem de menú nuevo, copia una línea de estas
+         y crea su panel correspondiente. -->
+    <header class="ui-element">
+        <div class="logo">CUERNO NAVIDEÑO</div>
+        <nav id="mainNav">
+            <a onclick="openOverlay('nosotros')">Quiénes somos</a>
+            <a onclick="openOverlay('kit')">Kit</a>
+            <a onclick="openOverlay('manual')">Manual</a>
+            <a onclick="openOverlay('galeria')">Galería</a>
+            <a onclick="openOverlay('envios')">Envíos</a>
+            <a onclick="openOverlay('preguntas')">Preguntas</a>
+            <button class="fullscreen-btn" id="fullscreenBtn" aria-label="Toggle Fullscreen">
+                <svg viewBox="0 0 24 24">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+            </button>
+        </nav>
+        <!-- Ícono ☰ que solo se ve en celular/tablet (ver style.css) -->
+        <div class="menu-toggle" id="menuToggle">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </header>
+
+    <!-- Botón flotante rojo "Comprar" — siempre visible, en todas las
+         pantallas. El número de WhatsApp (573000000000) y el mensaje
+         precargado van directo en el "href". Este mismo número se repite
+         más abajo en varios botones — si lo cambias, cámbialo en todos. -->
+    <a class="whatsapp-cta" href="https://wa.me/573000000000?text=Hola%2C%20estoy%20interesado%20en%20el%20Kit%20Cuerno%20Navide%C3%B1o%20para%20Moto.%20Quisiera%20conocer%20disponibilidad%20y%20precio." target="_blank" rel="noopener" aria-label="Comprar por WhatsApp">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20.5 3.5A11.8 11.8 0 0 0 12 0C5.4 0 .1 5.3.1 11.9c0 2.1.5 4.1 1.6 5.9L0 24l6.3-1.7a11.9 11.9 0 0 0 5.7 1.5c6.6 0 11.9-5.3 11.9-11.9 0-3.2-1.2-6.2-3.4-8.4zM12 21.3c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4a9.4 9.4 0 0 1-1.4-5c0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.6 2.8a9.3 9.3 0 0 1 2.8 6.6c0 5.2-4.2 9.4-9.4 9.4z"/></svg>
+        Comprar
+    </a>
+
+    <!-- ======= SLIDER PRINCIPAL (las 5 fotos a pantalla completa) =======
+         Cada <div class="slide"> tiene 3 capas, en este orden:
+           1. .background-layer → la foto de fondo (images/bg-xxx.jpg)
+           2. .photo-placeholder → la ventana de "sube tu foto aquí"
+              (BÓRRALA cuando ya tengas tu foto real en el fondo)
+           3. .image-info → el título y descripción que aparecen abajo
+         El primer <div class="slide active"> es el que se ve al cargar
+         la página. El orden de los slides = el orden en que rota el
+         carrusel (y debe coincidir con los puntitos .dot de más abajo). -->
+    <div class="slider-wrapper">
+        <div class="slider-container" id="slider">
+            <div class="slide active" data-index="0">
+                <div class="parallax-layer background-layer">
+                    <img src="images/bg-cuernos.jpg" alt="Fondo navideño decorativo">
+                </div>
+                <div class="photo-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="ph-label">Cuernos en el manubrio</span>
+                    <span class="ph-tag">Foto — reemplaza por tu imagen real</span>
+                </div>
+                <div class="image-info ui-element">
+                    <h2>Cuernos en el manubrio</h2>
+                    <p>Se ajustan a cada puño con velcro reforzado, sin herramientas</p>
+                </div>
+            </div>
+
+            <div class="slide" data-index="1">
+                <div class="parallax-layer background-layer">
+                    <img src="images/bg-nariz.jpg" alt="Fondo navideño decorativo">
+                </div>
+                <div class="photo-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="ph-label">Nariz en la farola</span>
+                    <span class="ph-tag">Foto — reemplaza por tu imagen real</span>
+                </div>
+                <div class="image-info ui-element">
+                    <h2>Nariz en la farola</h2>
+                    <p>Broche de presión, firme a cualquier velocidad</p>
+                </div>
+            </div>
+
+            <div class="slide" data-index="2">
+                <div class="parallax-layer background-layer">
+                    <img src="images/bg-cola.jpg" alt="Fondo navideño decorativo">
+                </div>
+                <div class="photo-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="ph-label">Cola en la parte trasera</span>
+                    <span class="ph-tag">Foto — reemplaza por tu imagen real</span>
+                </div>
+                <div class="image-info ui-element">
+                    <h2>Cola en la parte trasera</h2>
+                    <p>Se sujeta al guardabarros o portaequipaje</p>
+                </div>
+            </div>
+
+            <div class="slide" data-index="3">
+                <div class="parallax-layer background-layer">
+                    <img src="images/bg-kit.jpg" alt="Fondo navideño decorativo">
+                </div>
+                <div class="photo-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="ph-label">Kit completo puesto</span>
+                    <span class="ph-tag">Foto — reemplaza por tu imagen real</span>
+                </div>
+                <div class="image-info ui-element">
+                    <h2>Kit completo puesto</h2>
+                    <p>Las tres piezas juntas, listas para rodar</p>
+                </div>
+            </div>
+
+            <div class="slide" data-index="4">
+                <div class="parallax-layer background-layer">
+                    <img src="images/bg-moto.jpg" alt="Fondo navideño decorativo">
+                </div>
+                <div class="photo-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="ph-label">Tu moto, lista para diciembre</span>
+                    <span class="ph-tag">Foto — reemplaza por tu imagen real</span>
+                </div>
+                <div class="image-info ui-element">
+                    <h2>Tu moto, lista para diciembre</h2>
+                    <p>La más comentada del parqueadero esta Navidad</p>
+                </div>
+            </div>
+        </div>
+
+        <button class="nav-arrow prev ui-element" aria-label="Anterior">‹</button>
+        <button class="nav-arrow next ui-element" aria-label="Siguiente">›</button>
+
+        <div class="dots-container ui-element">
+            <button class="dot active" data-slide="0" aria-label="Ir a foto 1"></button>
+            <button class="dot" data-slide="1" aria-label="Ir a foto 2"></button>
+            <button class="dot" data-slide="2" aria-label="Ir a foto 3"></button>
+            <button class="dot" data-slide="3" aria-label="Ir a foto 4"></button>
+            <button class="dot" data-slide="4" aria-label="Ir a foto 5"></button>
+        </div>
+    </div>
+
+    <div class="parallax-shape shape-1 ui-element"></div>
+    <div class="parallax-shape shape-2 ui-element"></div>
+
+    <!-- Play/Pause Button -->
+    <button class="play-pause-btn ui-element" id="playPauseBtn" aria-label="Play/Pause Slideshow">
+        <svg viewBox="0 0 24 24">
+            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+        </svg>
+    </button>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar-container ui-element">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Duration Controls -->
+    <div class="duration-controls ui-element">
+        <button class="duration-btn" id="decreaseDuration" aria-label="Decrease Duration">−</button>
+        <div class="duration-display" id="durationDisplay">5<span>s</span></div>
+        <button class="duration-btn" id="increaseDuration" aria-label="Increase Duration">+</button>
+    </div>
+
+    <!-- Quiénes somos Overlay -->
+    <div class="overlay" id="nosotrosOverlay">
+        <div class="overlay-content">
+            <button class="close-btn" onclick="closeOverlay('nosotros')">×</button>
+            <h2>Quiénes somos</h2>
+            <p>Somos un pequeño negocio dedicado a la personalización navideña de motocicletas. Diseñamos el Cuerno Navideño Para Moto Kit pensando en quienes quieren destacar en diciembre sin modificar su moto ni gastar de más.</p>
+            <p>Cada kit se revisa antes de enviarse y respondemos directamente por WhatsApp, sin intermediarios ni bots — hablas con nosotros.</p>
+            <h3 class="overlay-subhead">Por qué comprar aquí</h3>
+            <ul class="kit-includes">
+                <li><span>Instalación en segundos</span><em>Sin herramientas</em></li>
+                <li><span>Envíos a todo el país</span><em>Transportadora / contraentrega</em></li>
+                <li><span>Atención directa</span><em>Por WhatsApp</em></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- El Kit Overlay -->
+    <div class="overlay" id="kitOverlay">
+        <div class="overlay-content">
+            <button class="close-btn" onclick="closeOverlay('kit')">×</button>
+            <h2>El Kit</h2>
+
+            <p><strong>¿Qué son los cuernos decorativos?</strong> Es un kit de accesorios navideños para moto: un par de cuernos dorados, una nariz roja y una cola esponjosa, inspirados en un reno. Se colocan y se quitan en minutos, y no dejan marca ni residuo en la moto.</p>
+
+            <h3 class="overlay-subhead">Qué incluye el kit</h3>
+            <!-- 3 tarjetas: cada una con su ventana de foto (para reemplazar
+                 más adelante) y la descripción de esa pieza debajo. -->
+            <div class="kit-parts-grid">
+                <div class="kit-part-card">
+                    <div class="kit-part-photo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        <span class="kit-part-photo__tag">Foto — reemplaza por tu imagen real</span>
+                    </div>
+                    <div class="kit-part-desc">
+                        <span class="kit-part-desc__title">Par de cuernos</span>
+                        <span class="kit-part-desc__loc">Manubrio</span>
+                    </div>
+                </div>
+
+                <div class="kit-part-card">
+                    <div class="kit-part-photo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        <span class="kit-part-photo__tag">Foto — reemplaza por tu imagen real</span>
+                    </div>
+                    <div class="kit-part-desc">
+                        <span class="kit-part-desc__title">Nariz roja</span>
+                        <span class="kit-part-desc__loc">Farola</span>
+                    </div>
+                </div>
+
+                <div class="kit-part-card">
+                    <div class="kit-part-photo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="1.4"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        <span class="kit-part-photo__tag">Foto — reemplaza por tu imagen real</span>
+                    </div>
+                    <div class="kit-part-desc">
+                        <span class="kit-part-desc__title">Cola esponjosa</span>
+                        <span class="kit-part-desc__loc">Parte trasera</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="overlay-subhead">Precio</h3>
+            <div class="price-card">
+                <div class="price-tag">Kit completo — 3 piezas</div>
+                <div class="price-amount">$45.000 <span>COP</span></div>
+                <div class="price-note">Precio de ejemplo — actualízalo antes de publicar</div>
+                <a class="buy-btn" href="https://wa.me/573000000000?text=Hola%2C%20estoy%20interesado%20en%20el%20Kit%20Cuerno%20Navide%C3%B1o%20para%20Moto.%20Quisiera%20conocer%20disponibilidad%20y%20precio." target="_blank" rel="noopener">Comprar por WhatsApp</a>
+            </div>
+            <p class="price-payment">Pago por transferencia bancaria. Al escribirnos te confirmamos disponibilidad y te enviamos los datos de la cuenta.</p>
+        </div>
+    </div>
+
+    <!-- Manual Overlay -->
+    <div class="overlay" id="manualOverlay">
+        <div class="overlay-content">
+            <button class="close-btn" onclick="closeOverlay('manual')">×</button>
+            <h2>Guía de Instalación</h2>
+            <p>¡Dale a tu moto el mejor espíritu navideño! Sigue estos sencillos pasos para instalar los cuernos, la nariz y la cola de forma rápida y segura.</p>
+
+            <h3 class="overlay-subhead">1. Cuernos de Reno (Manubrio)</h3>
+            <ol class="steps-list">
+                <li>Toma uno de los soportes de los cuernos y ábrelo suavemente expandiéndolo un poco.</li>
+                <li>Encájalo alrededor del manubrio de tu moto en la posición deseada.</li>
+                <li>Asegúrate de que quede firme y ajustado para que no se mueva con el viento durante el recorrido.</li>
+                <li>Repite el mismo procedimiento con el segundo cuerno en el otro lado del manubrio.</li>
+            </ol>
+
+            <h3 class="overlay-subhead">2. Nariz Roja (Farola)</h3>
+            <ol class="steps-list">
+                <li>Limpia y seca muy bien la superficie de la farola para eliminar polvo o grasa y asegurar una buena adherencia.</li>
+                <li>Pega la cinta de doble faz en el centro de la farola.</li>
+                <li>Alinea los botones de presión de la nariz con la cinta e intégralos haciendo firme presión hasta que abrochen correctamente.</li>
+            </ol>
+
+            <h3 class="overlay-subhead">3. Cola de Reno (Parte Trasera)</h3>
+            <p>Tienes dos opciones de instalación según el diseño de tu moto:</p>
+
+            <div class="option-block">
+                <strong>Opción A — Si tienes maletero:</strong>
+                <p>Acopla la cola directamente en el soporte o seguro del maletero hasta que quede bien enganchada.</p>
+            </div>
+
+            <div class="option-block">
+                <strong>Opción B — En la cola / carenado de la moto:</strong>
+                <ol class="steps-list">
+                    <li>Limpia muy bien la zona trasera donde vas a colocarla.</li>
+                    <li>Pega la cinta de doble faz sobre la superficie limpia.</li>
+                    <li>Une la cola a la cinta utilizando los botones de presión hasta que queden firmemente abrochados.</li>
+                </ol>
+            </div>
+
+            <div class="manual-tip">
+                <strong>Consejo:</strong> Antes de salir a rodar, verifica que todas las piezas estén bien fijadas y no obstruyan la visibilidad ni el libre movimiento del manubrio.
+            </div>
+        </div>
+    </div>
+
+    <!-- Galería Overlay -->
+    <div class="overlay" id="galeriaOverlay">
+        <div class="overlay-content overlay-content--wide">
+            <button class="close-btn" onclick="closeOverlay('galeria')">×</button>
+            <h2>Galería</h2>
+            <p>Estas son fotos de referencia. Reemplázalas por las fotos reales de tu producto cuando las tengas.</p>
+            <div class="gallery-grid">
+                <div class="gallery-tile"><img src="images/cuernos-en-el-manubrio.jpg" alt="Cuernos en el manubrio"></div>
+                <div class="gallery-tile"><img src="images/nariz-en-la-farola.jpg" alt="Nariz en la farola"></div>
+                <div class="gallery-tile"><img src="images/cola-en-la-parte-trasera.jpg" alt="Cola en la parte trasera"></div>
+                <div class="gallery-tile"><img src="images/kit-completo-puesto.jpg" alt="Kit completo puesto"></div>
+                <div class="gallery-tile"><img src="images/moto-lista-para-diciembre.jpg" alt="Moto lista para diciembre"></div>
+                <div class="gallery-tile"><img src="images/detalle-de-acabados.jpg" alt="Detalle de acabados"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Envíos Overlay -->
+    <div class="overlay" id="enviosOverlay">
+        <div class="overlay-content">
+            <button class="close-btn" onclick="closeOverlay('envios')">×</button>
+            <h2>Envíos</h2>
+            <p>Despachamos desde <strong>[tu ciudad]</strong> hacia todo Colombia por transportadora, y hacemos entregas locales por contraentrega según la zona.</p>
+            <p>Llena tus datos de envío y el peso/medidas del paquete — te llegan listos por WhatsApp para que cotices directo con la transportadora.</p>
+
+            <!-- Formulario de cotización de envío (estilo guía Interrápidísimo).
+                 Peso y medidas vienen autocompletados con los del kit, pero el
+                 cliente los puede editar si necesita otra presentación. -->
+            <form class="shipping-form" id="shippingForm">
+                <div class="form-row">
+                    <label for="envioNombre">Nombre completo</label>
+                    <input type="text" id="envioNombre" placeholder="Tu nombre y apellido" required>
+                </div>
+
+                <div class="form-row">
+                    <label for="envioTelefono">Teléfono de contacto</label>
+                    <input type="tel" id="envioTelefono" placeholder="300 000 0000" required>
+                </div>
+
+                <div class="form-row">
+                    <label for="envioDireccion">Dirección de envío</label>
+                    <input type="text" id="envioDireccion" placeholder="Calle, número, barrio" required>
+                </div>
+
+                <div class="form-row form-row--split">
+                    <div>
+                        <label for="envioCiudad">Ciudad</label>
+                        <input type="text" id="envioCiudad" placeholder="Ej. Medellín" required>
+                    </div>
+                    <div>
+                        <label for="envioDepartamento">Departamento</label>
+                        <input type="text" id="envioDepartamento" placeholder="Ej. Antioquia" required>
+                    </div>
+                </div>
+
+                <!-- Medidas del paquete, en formato "chip" (como la guía de
+                     Interrápidísimo: nombre a la izquierda, medida a la
+                     derecha). Sigue siendo un campo editable, solo que
+                     estilizado para que se vea como una fila de resumen. -->
+                <div class="form-row">
+                    <div class="dims-chip">
+                        <span class="dims-chip__label">Medidas del paquete</span>
+                        <input type="text" id="envioMedidas" class="dims-chip__value" value="25 x 25 x 3 cm">
+                    </div>
+                </div>
+
+                <div class="form-row form-row--split">
+                    <div>
+                        <label for="envioPeso">Peso aprox. (2 kg)</label>
+                        <input type="number" id="envioPeso" value="2" min="0" step="0.1">
+                    </div>
+                </div>
+
+                <button type="submit" class="buy-btn">Cotizar por WhatsApp</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Preguntas Overlay -->
+    <div class="overlay" id="preguntasOverlay">
+        <div class="overlay-content">
+            <button class="close-btn" onclick="closeOverlay('preguntas')">×</button>
+            <h2>Preguntas frecuentes</h2>
+
+            <details class="faq-item" open>
+                <summary>¿El kit daña la pintura o el manubrio?</summary>
+                <p>No. Los cuernos se sujetan con velcro reforzado y la nariz con un broche de presión — ninguna pieza usa pegante permanente ni tornillos.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Sirve para cualquier modelo de moto?</summary>
+                <p>Se ajusta a manubrios y farolas estándar. Si tu moto tiene un diseño muy particular, escríbenos una foto por WhatsApp y te confirmamos.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Cuánto dura la instalación?</summary>
+                <p>Menos de 5 minutos, sin herramientas. Se retira igual de rápido al terminar la temporada.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Hacen envíos a todo el país?</summary>
+                <p>Sí, por transportadora a nivel nacional, y contraentrega en algunas zonas locales. Ver la sección "Envíos" para más detalle.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Cómo pago?</summary>
+                <p>Por transferencia bancaria. Nos escribes por WhatsApp, confirmamos disponibilidad y te enviamos los datos de la cuenta.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Qué pasa si me falta alguna pieza o el kit llega incompleto?</summary>
+                <p>Revisamos cada kit antes de enviarlo, pero si aun así llega incompleto, escríbenos por WhatsApp con una foto de lo que recibiste y te enviamos la pieza faltante sin costo adicional.</p>
+            </details>
+            <details class="faq-item">
+                <summary>No tengo experiencia previa, ¿es difícil utilizar este producto?</summary>
+                <p>Para nada. El kit se instala sin herramientas y en pocos minutos. En la sección "Manual" tienes el paso a paso completo, con instrucciones sencillas para cada pieza.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Ofrecen soporte técnico o asesoría si me surge alguna duda durante el uso?</summary>
+                <p>Sí. Puedes escribirnos por WhatsApp en cualquier momento y te ayudamos a resolver cualquier duda sobre la instalación o el uso del kit.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Es seguro comprar a través del sitio web?</summary>
+                <p>Sí. La página no pide pagos ni datos de tarjeta — todo el proceso se confirma directamente contigo por WhatsApp antes de hacer cualquier transferencia.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Cuál es la política de cambios o devoluciones si el producto no cumple mis expectativas?</summary>
+                <p>Si el producto no cumple tus expectativas, escríbenos dentro de los primeros [cantidad de días] después de recibirlo y coordinamos el cambio o la devolución.</p>
+            </details>
+            <details class="faq-item">
+                <summary>¿Cuál es la política de cambios o devoluciones si al producto le falta una pieza?</summary>
+                <p>Si el kit llega con alguna pieza faltante, te la reponemos sin costo — escríbenos por WhatsApp con una foto del kit recibido y la enviamos de inmediato, sin necesidad de devolver el resto del producto.</p>
+            </details>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="ui-element">
+        <p>© 2026 Cuerno Navideño Para Moto Kit</p>
+    </footer>
+<script src="js/scripts.js"></script>
+</body>
+</html>
