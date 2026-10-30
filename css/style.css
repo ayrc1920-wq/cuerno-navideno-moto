@@ -2100,3 +2100,10 @@ header .titulo-navideno {
 @media (min-width: 1200px) {
 	header nav { transform: translateY(-13px); }
 }
+
+/* Lista "Por qué comprar aquí" en móvil: separación entre el texto blanco y el rojo. */
+@media (max-width: 768px) {
+	.kit-includes li { gap: 16px; }
+	.kit-includes li span { flex: 1 1 52%; }
+	.kit-includes li em { flex: 0 1 44%; text-align: right; line-height: 1.3; }
+}
