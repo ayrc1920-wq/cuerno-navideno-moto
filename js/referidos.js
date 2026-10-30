@@ -160,7 +160,7 @@
   // Qué se le dice a la persona según el resultado de usar un enlace.
   function textoResultado(r, invitador) {
     const quien = invitador || "quien te invitó";
-    if (r.resultado === "valida") return { tipo: "ok", t: "¡Listo! Tu registro quedó validado y ya cuenta para " + quien + ". 🎉" };
+    if (r.resultado === "valida") return { tipo: "ok", t: "¡Listo! Tu registro quedó validado y ya cuenta para " + quien + "." };
     if (r.resultado === "pendiente") return { tipo: "info", t: "Tu registro quedó en revisión. Te avisamos cuando se valide." };
     if (r.resultado === "duplicada") return { tipo: "info", t: "Este enlace ya había sido contado, no se suma dos veces." };
     const motivos = {
@@ -398,7 +398,7 @@
     const inv = $("#refInvitado");
     if (inv) {
       inv.hidden = !S.invitador || (S.prog && S.prog.participa);
-      inv.textContent = S.invitador ? "🎁 Te invitó " + S.invitador + ". ¡Regístrate y participa tú también!" : "";
+      inv.textContent = S.invitador ? "Te invitó " + S.invitador + ". ¡Regístrate y participa tú también!" : "";
     }
 
     // A) Visitante sin sesión
@@ -426,7 +426,7 @@
     // B) Con sesión pero sin enlace todavía: pedir el nombre
     if (!S.prog || !S.prog.participa) {
       const caja = el("form", "ref-caja");
-      caja.appendChild(el("div", "ref-caja-titulo", "Casi listo ✨"));
+      caja.appendChild(el("div", "ref-caja-titulo", "Casi listo"));
       const lab = el("label", "ref-etiqueta", "¿Cómo te llamamos? (nombre o apodo)");
       lab.htmlFor = "refNombre";
       const inp = el("input", "ref-input"); inp.id = "refNombre"; inp.type = "text"; inp.maxLength = 30; inp.required = true;
@@ -526,8 +526,8 @@
     if (S.prog && S.prog.participa) {
       if (S.ultimasValidas != null) {
         if (S.prog.recompensas_ganadas > (S._ganadas || 0)) premioNuevo = true;
-        else if (S.prog.validas > S.ultimasValidas) { confeti(40); aviso("✅ ¡Nueva recomendación validada!", "ok"); }
-        else if (S.prog.pendientes > (S.ultimasPend || 0)) aviso("⏳ Una recomendación quedó en revisión.", "info");
+        else if (S.prog.validas > S.ultimasValidas) { confeti(40); aviso("¡Nueva recomendación validada!", "ok"); }
+        else if (S.prog.pendientes > (S.ultimasPend || 0)) aviso("Una recomendación quedó en revisión.", "info");
       }
       S.ultimasValidas = S.prog.validas; S.ultimasPend = S.prog.pendientes; S._ganadas = S.prog.recompensas_ganadas;
     }
@@ -540,7 +540,7 @@
       pintarEstado();
       await espera(1500);
       explosionRegalo();
-      aviso("🎉 ¡Ganaste un descuento!", "ok");
+      aviso("¡Ganaste un descuento!", "ok");
       await espera(1600);
       S.prog = real;
     }
