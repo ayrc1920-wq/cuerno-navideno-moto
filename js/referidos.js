@@ -529,6 +529,7 @@
       try {
         if (!S.invitador) { try { S.invitador = await api.invitadoPor(refPend); } catch (e) {} }
         S.mensaje = textoResultado(await api.usarReferido(refPend), S.invitador);
+        aviso(S.mensaje.t, S.mensaje.tipo);
         S.prog = await api.progreso();
       } catch (e) { /* si falla, no pasa nada: el panel sigue normal */ }
     }
