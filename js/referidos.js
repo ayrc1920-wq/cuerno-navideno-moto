@@ -280,7 +280,7 @@
 
   // Compartir
   function compartirWhatsApp(codigo) {
-    const url = "https://wa.me/?text=" + encodeURIComponent(textoInvitacion(enlaceDe(codigo, "whatsapp")));
+    const url = "https://api.whatsapp.com/send?text=" + encodeURIComponent(textoInvitacion(enlaceDe(codigo, "whatsapp")));
     window.open(url, "_blank", "noopener");
   }
   function compartirFacebook(codigo) {
