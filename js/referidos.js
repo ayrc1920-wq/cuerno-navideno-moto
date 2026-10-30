@@ -522,6 +522,16 @@
       S.sesion = await api.sesion();
       S.prog = S.sesion ? await api.progreso() : null;
     } catch (e) { aviso("No pudimos cargar los datos. Revisa tu conexión.", "error"); return; }
+    // Quien ya participaba y abre un enlace de referido: la base de datos decide (y deja registro).
+    const refPend = memoria.leer("cn_ref");
+    if (S.prog && S.prog.participa && refPend && PATRON_CODIGO.test(refPend)) {
+      memoria.borrar("cn_ref");
+      try {
+        if (!S.invitador) { try { S.invitador = await api.invitadoPor(refPend); } catch (e) {} }
+        S.mensaje = textoResultado(await api.usarReferido(refPend), S.invitador);
+        S.prog = await api.progreso();
+      } catch (e) { /* si falla, no pasa nada: el panel sigue normal */ }
+    }
     let premioNuevo = false;
     if (S.prog && S.prog.participa) {
       if (S.ultimasValidas != null) {
