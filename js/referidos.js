@@ -22,8 +22,12 @@
   "use strict";
 
   /* ---------- 1. CONFIGURACIÓN Y UTILIDADES ---------- */
-  const CFG = window.REFERIDOS_CONFIG || { MODO: "demo" };
-  const MODO = CFG.MODO === "supabase" ? "supabase" : "demo";
+  // Si js/referidos-config.js no se cargó (archivo mal ubicado o con otro nombre), NO se cae al modo
+  // demo en silencio: se intenta el modo real, que mostrará un aviso de que no pudo conectarse.
+  const CFG = window.REFERIDOS_CONFIG || {};
+  if (!window.REFERIDOS_CONFIG) console.error("Falta js/referidos-config.js (revisa que esté en la carpeta js con ese nombre exacto).");
+  if (!CFG.URL_PUBLICA) CFG.URL_PUBLICA = window.location.origin + window.location.pathname.replace(/[^/]*$/, "");
+  const MODO = CFG.MODO === "demo" ? "demo" : "supabase";
   const PATRON_CODIGO = /^[A-HJ-NP-Z2-9]{8}$/; // 8 caracteres, sin I, O, 0, 1
 
   // Crea un elemento: el("div", "clase", "texto"). Usa textContent, así que
