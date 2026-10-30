@@ -15,6 +15,11 @@
    7. Botón de reproducir/pausar
    8. Control de duración de cada foto (segundos)
    9. Botón de ocultar/mostrar toda la interfaz (tecla H)
+   10. Formulario de cotización de envío (panel Envíos → WhatsApp)
+   11. Sugerencias de ciudad y departamento (panel Envíos)
+   12. El ojito se oculta mientras hay un panel abierto
+   13. Barra de progreso centrada sobre los botones −, 5s, +
+   14. Letras temporales de las ventanas de foto
    ============================================================ */
 
 
@@ -179,40 +184,178 @@ function closeOverlay(name) {
   }
 }
 
-// Función heredada de la plantilla original (formulario de contacto).
-// Ya no se usa porque quitamos ese formulario, pero la dejamos por si
-// en algún momento quieres agregar un formulario propio.
-function handleSubmit(e) {
-  e.preventDefault();
-  alert("Thank you for your message! We will get back to you soon.");
-  e.target.reset();
-  closeOverlay("contact");
-}
-
 
 /* ---------- 4. CÍRCULOS DECORATIVOS FLOTANTES ---------- */
-// Son los dos círculos borrosos que aparecen y cambian de posición
-// solos cada cierto tiempo (o al hacer clic sobre ellos).
+// Son los dos círculos borrosos que cambian de posición solos cada cierto
+// tiempo. Si los tocas (o les haces clic), viajan hacia el lado contrario de
+// la pantalla, deslizándose sin saltos.
 
-// Elige una posición al azar, pero SOLO dentro de 4 "zonas seguras"
-// en las esquinas de la pantalla — así nunca tapan la ventana central
-// donde va la foto de reemplazo. Si quieres que se muevan por más
-// espacio, agranda estos rangos (son porcentajes de la pantalla).
-function moveShapeToRandomPosition(shape) {
-  const zones = [
-    { top: [6, 18],  left: [2, 16] },   // esquina superior izquierda
-    { top: [6, 18],  left: [80, 94] },  // esquina superior derecha
-    { top: [74, 88], left: [2, 16] },   // esquina inferior izquierda
-    { top: [74, 88], left: [80, 94] },  // esquina inferior derecha
-  ];
-  const zone = zones[Math.floor(Math.random() * zones.length)];
-  const top = zone.top[0] + Math.random() * (zone.top[1] - zone.top[0]);
-  const left = zone.left[0] + Math.random() * (zone.left[1] - zone.left[0]);
+// Cómo se mueven las burbujas:
+//   · Solas, cada 15 segundos: cada una pasa a otro lugar libre.
+//   · Al tocarlas (clic): viajan hacia el lado contrario de la pantalla,
+//     deslizándose (sin saltos y sin rebote) por un camino que también está libre.
+//     Si el pasillo es más angosto que la burbuja, se encoge para pasar.
+// En los dos casos nunca deben tapar (con un margen de 24px alrededor):
+//   · la ventana flotante de la foto      · el título y la descripción de la foto
+//   · los botones −, 5s, + y la barra     · el botón de play/pausa
+//   · el botón "Comprar"                  · el ojito, los puntitos y las flechas ‹ ›
+// Si no cabe en ningún lado, la burbuja se achica hasta que quepa; solo si ni así
+// cabe (pantallas diminutas), se desvanece y vuelve a aparecer sola cuando haya espacio.
+const SHAPE_MARGIN = 24;  // aire (px) que debe quedar entre la burbuja y lo que no debe tapar
+const SHAPE_PEEK = 0.5;   // en el viaje al otro lado pueden asomar hasta la mitad por el borde de la
+                          // pantalla (así pueden pasar por arriba de la ventana de la foto)
+const GLIDE_STEP = 20;    // tamaño (px) de la cuadrícula con la que se busca el camino
+const GLIDE_SPEED = 320;  // velocidad media del viaje en px por segundo (más alto = más rápido)
+const GLIDE_SCALES = [1, 0.75, 0.55, 0.4, 0.3, 0.2]; // tamaños con los que intenta pasar: primero normal (1) y, si el
+                          // pasillo es muy angosto, cada vez más chica (75%, 55%, 40%, 30%, 20%)
+const SHAPE_FIT_SCALES = [1, 0.8, 0.65, 0.5, 0.4, 0.3]; // si una burbuja no cabe en ningún lugar de la pantalla,
+                          // se achica hasta que quepa (en vez de desaparecer)
+const GLIDE_RESIZE_MS = 350; // lo que tarda en encogerse y en volver a crecer (milisegundos)
 
-  shape.style.top = top + "%";
-  shape.style.left = left + "%";
+// Rectángulos de todo lo que las burbujas NO deben tapar, según lo que se ve ahora.
+// Con forTravel=true se omiten las flechas ‹ › : durante el viaje al otro lado la
+// burbuja (que en ese momento no responde a clics) puede pasar por encima de ellas,
+// porque en pantallas angostas las flechas bloquearían el paso por los lados.
+// El lugar donde la burbuja TERMINA sí se elige sin tapar las flechas.
+function getKeepClearRects(forTravel = false) {
+  const selectors = [
+    ".slide.active .photo-placeholder", // ventana flotante de la foto
+    ".slide.active .image-info",        // título + descripción de la foto
+    ".duration-controls",               // botones −, 5s, +
+    ".progress-bar-container",          // barra de progreso
+    ".play-pause-btn",                  // play / pausa
+    ".whatsapp-cta",                    // botón Comprar
+    ".ref-btn",                         // botón "Invita y gana"
+    ".ref-aviso-invitacion:not([hidden])", // aviso "Te invitó…"
+    ".ui-toggle-btn",                   // el ojito
+    ".dots-container",                  // puntitos del slider
+    ".nav-arrow"                        // flechas ‹ ›
+  ].filter((sel) => !(forTravel && sel === ".nav-arrow"));
+  const rects = [];
+  selectors.forEach((sel) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) rects.push(r);
+    });
+  });
+  return rects;
+}
+
+// ¿Este rectángulo está dentro de la pantalla y sin tocar nada de lo anterior?
+// peek = qué parte de la burbuja puede asomar fuera de la pantalla (0 = ninguna).
+function isSafeRect(rect, keepClear, peek = 0) {
+  const px = (rect.right - rect.left) * peek;
+  const py = (rect.bottom - rect.top) * peek;
+  const inside = rect.left >= -px && rect.top >= -py &&
+                 rect.right <= window.innerWidth + px && rect.bottom <= window.innerHeight + py;
+  if (!inside) return false;
+  return !keepClear.some((r) =>
+    rect.left < r.right + SHAPE_MARGIN && rect.right > r.left - SHAPE_MARGIN &&
+    rect.top < r.bottom + SHAPE_MARGIN && rect.bottom > r.top - SHAPE_MARGIN);
+}
+
+// Busca una posición libre. Si checkPath es true, además exige que el camino que va a
+// recorrer la burbuja (se desliza ~0.8s) no pase por encima de nada.
+// Primero prueba al azar; si no encuentra (pasillos muy angostos), revisa toda la
+// pantalla casilla por casilla. Devuelve { x, y } o null si no hay lugar.
+function findFreeSpot(shape, keepClear, checkPath) {
+  const w = shape.offsetWidth, h = shape.offsetHeight;
+  const minX = 8, minY = 8;
+  const maxX = window.innerWidth - w - 8, maxY = window.innerHeight - h - 8;
+  if (maxX < minX || maxY < minY) return null;
+  const cur = shape.getBoundingClientRect();
+
+  const isGood = (x, y) => {
+    if (!isSafeRect({ left: x, top: y, right: x + w, bottom: y + h }, keepClear)) return false;
+    if (!checkPath) return true;
+    // se revisan puntos a lo largo del recorrido (hasta 1.12 por el pequeño "rebote" final)
+    for (let t = 0.1; t <= 1.12; t += 0.1) {
+      const px = cur.left + (x - cur.left) * t;
+      const py = cur.top + (y - cur.top) * t;
+      const r = { left: px, top: py, right: px + w, bottom: py + h };
+      const overlapsSomething = keepClear.some((k) =>
+        r.left < k.right + SHAPE_MARGIN && r.right > k.left - SHAPE_MARGIN &&
+        r.top < k.bottom + SHAPE_MARGIN && r.bottom > k.top - SHAPE_MARGIN);
+      if (overlapsSomething) return false;
+    }
+    return true;
+  };
+
+  for (let n = 0; n < 80; n++) {
+    const x = minX + Math.random() * (maxX - minX);
+    const y = minY + Math.random() * (maxY - minY);
+    if (isGood(x, y)) return { x, y };
+  }
+  const found = [];
+  for (let y = minY; y <= maxY; y += 8) {
+    for (let x = minX; x <= maxX; x += 8) {
+      if (isGood(x, y)) found.push({ x, y });
+    }
+  }
+  return found.length ? found[Math.floor(Math.random() * found.length)] : null;
+}
+
+// Pone la burbuja en (x, y). Con animate=false se coloca de golpe, sin deslizarse.
+function setShapePosition(shape, x, y, animate) {
+  if (!animate) shape.style.transition = "none";
+  shape.style.top = y + "px";
+  shape.style.left = x + "px";
   shape.style.bottom = "auto";
   shape.style.right = "auto";
+  if (!animate) {
+    void shape.offsetWidth;        // fuerza al navegador a aplicar la posición ya
+    shape.style.transition = "";   // y se devuelve la animación normal
+  }
+}
+
+// Coloca la burbuja DE GOLPE en un lugar libre. Si con su tamaño normal no cabe en ningún
+// lado, la va achicando (80%, 65%, 50%, 40%, 30%) hasta que quepa. Si ni así, se desvanece.
+function placeWithFit(shape, keepClear) {
+  shape.style.transition = "none"; // sin animar mientras se prueba cada tamaño
+  shape.style.width = "";
+  shape.style.height = "";
+  const baseW = shape.offsetWidth, baseH = shape.offsetHeight;
+  let spot = null;
+  for (const k of SHAPE_FIT_SCALES) {
+    if (k !== 1) {
+      shape.style.width = (baseW * k).toFixed(2) + "px";
+      shape.style.height = (baseH * k).toFixed(2) + "px";
+    }
+    spot = findFreeSpot(shape, keepClear, false);
+    if (spot) break;
+  }
+  if (spot) {
+    shape.style.top = spot.y + "px";
+    shape.style.left = spot.x + "px";
+    shape.style.bottom = "auto";
+    shape.style.right = "auto";
+    showShape(shape);
+  } else {
+    shape.style.width = "";
+    shape.style.height = "";
+    hideShape(shape);
+  }
+  void shape.offsetWidth;        // fuerza al navegador a aplicar todo ya
+  shape.style.transition = "";   // y se devuelve la animación normal
+  return !!spot;
+}
+
+function hideShape(shape) { shape.style.opacity = "0"; shape.style.pointerEvents = "none"; }
+function showShape(shape) { shape.style.opacity = ""; shape.style.pointerEvents = ""; }
+
+// Mueve una burbuja a otro lugar libre (automáticamente cada 15 segundos).
+function moveShapeToRandomPosition(shape) {
+  if (shape.dataset.gliding) return; // si está viajando por un clic, no se interrumpe
+  const keepClear = getKeepClearRects();
+  const wasSafe = isSafeRect(shape.getBoundingClientRect(), keepClear);
+  // Si ya estaba tapando algo se recoloca de golpe; si no, se desliza por un camino libre.
+  const spot = findFreeSpot(shape, keepClear, wasSafe);
+  if (!spot) {
+    if (!wasSafe) placeWithFit(shape, keepClear); // tapaba algo o estaba oculta: se recoloca (achicándola si hace falta)
+    return;                                       // si estaba bien ubicada, simplemente se queda donde está
+  }
+  showShape(shape);
+  setShapePosition(shape, spot.x, spot.y, wasSafe);
 
   // Le da una vuelta aleatoria al moverse, como efecto visual.
   const rotation = 360 * Math.random();
@@ -220,11 +363,265 @@ function moveShapeToRandomPosition(shape) {
   setTimeout(() => { shape.style.transform = ""; }, 800);
 }
 
+// Revisa que ninguna burbuja esté tapando algo; si lo hace, la recoloca al instante.
+// Se llama al cargar la página y cuando cambia el tamaño de la ventana.
+function settleShapes() {
+  const keepClear = getKeepClearRects();
+  document.querySelectorAll(".parallax-shape").forEach((shape) => {
+    const wasGliding = !!shape.dataset.gliding;
+    if (wasGliding) shape.dataset.glideAbort = "1"; // un viaje en curso se cancela
+    // Una burbuja achicada se vuelve a colocar: quizá ahora ya cabe con su tamaño normal.
+    const shrunk = shape.style.width !== "";
+    if (!wasGliding && !shrunk && isSafeRect(shape.getBoundingClientRect(), keepClear)) { showShape(shape); return; }
+    placeWithFit(shape, keepClear);
+  });
+}
+
 // Mueve los círculos automáticamente, uno tras otro (con 2s de diferencia).
 function autoMoveShapes() {
   document.querySelectorAll(".parallax-shape").forEach((shape, i) => {
     setTimeout(() => moveShapeToRandomPosition(shape), 2000 * i);
   });
+}
+
+/* ----- Viaje al lado contrario cuando se toca una burbuja ----- */
+
+// Dónde está la burbuja ahora (aunque esté a mitad de una animación).
+function currentShapePos(shape) {
+  const cs = window.getComputedStyle(shape);
+  const x = parseFloat(cs.left), y = parseFloat(cs.top);
+  if (!isNaN(x) && !isNaN(y)) return { x, y };
+  const r = shape.getBoundingClientRect();
+  return { x: r.left, y: r.top };
+}
+
+// Busca el camino hacia el lado contrario de la pantalla. Divide la pantalla en
+// una cuadrícula, marca qué casillas están libres para la burbuja y busca el
+// camino más corto (el pasillo de arriba o el de en medio, por ejemplo) hasta un
+// lugar libre del otro lado. Si el pasillo es más angosto que la burbuja, prueba
+// con la burbuja más chica: se encoge para pasar y vuelve a su tamaño al llegar.
+// Devuelve { points, k } (puntos CENTRALES por los que pasa y la escala con que
+// viaja, 1 = tamaño normal) o null si no hay camino.
+function planGlideRoute(shape, travelClear, restClear) {
+  const w0 = shape.offsetWidth, h0 = shape.offsetHeight;
+  const start = currentShapePos(shape);
+  const startC = { x: start.x + w0 / 2, y: start.y + h0 / 2 };
+  // Primero se intenta llegar de verdad al otro lado (tier 0), probando cada tamaño de
+  // burbuja. Solo si con ninguno se puede, se acepta avanzar "al menos hacia ese lado" (tier 1).
+  for (const tier of [0, 1]) {
+    for (const k of GLIDE_SCALES) {
+      const points = planGlideRouteAtScale(w0, h0, k, startC, travelClear, restClear, tier);
+      if (points) return { points, k };
+    }
+  }
+  return null;
+}
+
+function planGlideRouteAtScale(w0, h0, k, startC, keepClear, restClear, tier) {
+  const w = w0 * k, h = h0 * k;                 // tamaño con el que viaja
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const minX = -w * SHAPE_PEEK, maxX = vw - w + w * SHAPE_PEEK;
+  const minY = -h * SHAPE_PEEK, maxY = vh - h + h * SHAPE_PEEK;
+  if (maxX <= minX || maxY <= minY) return null;
+  const nx = Math.floor((maxX - minX) / GLIDE_STEP) + 1;
+  const ny = Math.floor((maxY - minY) / GLIDE_STEP) + 1;
+  const cellX = (i) => minX + i * GLIDE_STEP;     // esquina superior izquierda de la casilla
+  const cellY = (j) => minY + j * GLIDE_STEP;
+  const centerX = (idx) => cellX(idx % nx) + w / 2;
+  const centerY = (idx) => cellY((idx - (idx % nx)) / nx) + h / 2;
+  const rectAt = (x, y) => ({ left: x, top: y, right: x + w, bottom: y + h });
+
+  const cache = new Int8Array(nx * ny); // 0 = sin calcular, 1 = libre, 2 = ocupada
+  const isFree = (i, j) => {
+    if (i < 0 || j < 0 || i >= nx || j >= ny) return false;
+    const idx = j * nx + i;
+    if (!cache[idx]) cache[idx] = isSafeRect(rectAt(cellX(i), cellY(j)), keepClear, SHAPE_PEEK) ? 1 : 2;
+    return cache[idx] === 1;
+  };
+
+  // casilla de salida: la más cercana a donde está la burbuja
+  let si = Math.min(nx - 1, Math.max(0, Math.round((startC.x - w / 2 - minX) / GLIDE_STEP)));
+  let sj = Math.min(ny - 1, Math.max(0, Math.round((startC.y - h / 2 - minY) / GLIDE_STEP)));
+  if (!isFree(si, sj)) {
+    let found = false;
+    for (let r = 1; r <= 3 && !found; r++) {
+      for (let dj = -r; dj <= r && !found; dj++) {
+        for (let di = -r; di <= r && !found; di++) {
+          if (isFree(si + di, sj + dj)) { si += di; sj += dj; found = true; }
+        }
+      }
+    }
+    if (!found) return null;
+  }
+
+  // búsqueda en anchura (BFS) por todas las casillas alcanzables
+  const parent = new Int32Array(nx * ny).fill(-2); // -2 = no alcanzable, -1 = salida
+  const startIdx = sj * nx + si;
+  parent[startIdx] = -1;
+  const queue = [startIdx];
+  const moves = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  for (let q = 0; q < queue.length; q++) {
+    const idx = queue[q], i = idx % nx, j = (idx - i) / nx;
+    for (const [di, dj] of moves) {
+      const ni = i + di, nj = j + dj;
+      if (!isFree(ni, nj)) continue;
+      if (di !== 0 && dj !== 0 && (!isFree(i + di, j) || !isFree(i, j + dj))) continue; // sin cortar esquinas
+      const nIdx = nj * nx + ni;
+      if (parent[nIdx] !== -2) continue;
+      parent[nIdx] = idx;
+      queue.push(nIdx);
+    }
+  }
+
+  // Destino: un lugar del otro lado donde la burbuja, YA con su tamaño normal, quepa sin tapar
+  // nada (esta vez SÍ cuentan las flechas ‹ ›) y que esté cerca de una casilla alcanzable.
+  // Se revisa la pantalla cada 10px (no solo las casillas), así no se pierden pasillos angostos.
+  const goLeft = startC.x > vw / 2;
+  const inZone = tier === 0
+    ? (c) => (goLeft ? c <= vw * 0.4 : c >= vw * 0.6)          // bien al otro lado
+    : (c) => (goLeft ? c < startC.x - 40 : c > startC.x + 40); // al menos hacia ese lado
+  const nearestReachable = (cx, cy) => {
+    const i0 = Math.round((cx - w / 2 - minX) / GLIDE_STEP);
+    const j0 = Math.round((cy - h / 2 - minY) / GLIDE_STEP);
+    let best = -1, bestD = Infinity;
+    for (let dj = -1; dj <= 1; dj++) {
+      for (let di = -1; di <= 1; di++) {
+        const i = i0 + di, j = j0 + dj;
+        if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+        const idx = j * nx + i;
+        if (parent[idx] === -2) continue;
+        const d = Math.hypot(centerX(idx) - cx, centerY(idx) - cy);
+        if (d < bestD) { bestD = d; best = idx; }
+      }
+    }
+    return bestD <= GLIDE_STEP * 1.5 ? best : -1;
+  };
+  let candidates = [];
+  for (const peek of [0, SHAPE_PEEK]) { // primero lugares completamente a la vista
+    for (let cy = h0 / 2 - h0 * peek; cy <= vh - h0 / 2 + h0 * peek; cy += 10) {
+      for (let cx = w0 / 2 - w0 * peek; cx <= vw - w0 / 2 + w0 * peek; cx += 10) {
+        if (!inZone(cx)) continue;
+        const full = { left: cx - w0 / 2, top: cy - h0 / 2, right: cx + w0 / 2, bottom: cy + h0 / 2 };
+        if (!isSafeRect(full, restClear, peek)) continue;
+        const idx = nearestReachable(cx, cy);
+        if (idx !== -1) candidates.push({ cx, cy, idx });
+      }
+    }
+    if (candidates.length) break;
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => Math.abs(b.cx - startC.x) - Math.abs(a.cx - startC.x));
+  const target = candidates[Math.floor(Math.random() * Math.max(1, Math.ceil(candidates.length * 0.25)))]; // uno de los más lejanos
+
+  // reconstruir el camino y quitarle los zigzags (solo se conservan los puntos donde hay que girar)
+  const cells = [];
+  for (let idx = target.idx; idx !== -1; idx = parent[idx]) cells.push({ x: centerX(idx), y: centerY(idx) });
+  cells.reverse();
+  cells[0] = { x: startC.x, y: startC.y };
+  cells.push({ x: target.cx, y: target.cy });
+  const clearSegment = (a, b) => {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(dist / 8));
+    for (let t = 0; t <= n; t++) {
+      const x = a.x + (b.x - a.x) * (t / n), y = a.y + (b.y - a.y) * (t / n);
+      if (!isSafeRect(rectAt(x - w / 2, y - h / 2), keepClear, SHAPE_PEEK)) return false;
+    }
+    return true;
+  };
+  const route = [cells[0]];
+  let a = 0;
+  while (a < cells.length - 1) {
+    let b = cells.length - 1;
+    while (b > a + 1 && !clearSegment(cells[a], cells[b])) b--;
+    route.push(cells[b]);
+    a = b;
+  }
+  return route;
+}
+
+// Desliza la burbuja por la ruta, a velocidad pareja, empezando y terminando con
+// suavidad (sin saltos ni rebote). Si la ruta pide una burbuja más chica (k < 1),
+// primero se encoge en su lugar, viaja, y al llegar vuelve a su tamaño normal.
+function glideShape(shape, plan) {
+  const pts = plan.points, k = plan.k;
+  const w0 = shape.offsetWidth, h0 = shape.offsetHeight;
+  const last = pts[pts.length - 1];
+  const finalX = last.x - w0 / 2, finalY = last.y - h0 / 2;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const lens = [0];
+  for (let i = 1; i < pts.length; i++) {
+    lens.push(lens[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  }
+  const total = lens[lens.length - 1];
+  if (reduce || (!total && k === 1)) { setShapePosition(shape, finalX, finalY, false); return; }
+
+  const travelMs = total ? Math.min(12, Math.max(0.9, total / GLIDE_SPEED)) * 1000 : 0;
+  const resizeMs = k < 1 ? GLIDE_RESIZE_MS : 0;
+  const totalMs = resizeMs * 2 + travelMs;
+  const ease = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
+
+  const keepW = shape.style.width, keepH = shape.style.height; // tamaño que tenía (puede venir achicada)
+  shape.dataset.gliding = "1";
+  delete shape.dataset.glideAbort;
+  shape.style.transition = "none"; // la animación la hacemos nosotros, fotograma a fotograma
+  shape.style.pointerEvents = "none"; // mientras viaja no atrapa clics (no bloquea lo que cruza)
+  shape.style.bottom = "auto";
+  shape.style.right = "auto";
+  let t0 = null;
+
+  // aborted = true cuando el viaje se cancela (p. ej. cambió el tamaño de la ventana): en ese
+  // caso NO se mueve ni se cambia de tamaño, porque settleShapes ya la recolocó.
+  function finish(aborted) {
+    if (!aborted) {
+      shape.style.width = keepW;   // vuelve al tamaño que tenía antes de viajar
+      shape.style.height = keepH;
+      shape.style.left = finalX.toFixed(2) + "px";
+      shape.style.top = finalY.toFixed(2) + "px";
+    }
+    void shape.offsetWidth;
+    shape.style.transition = "";
+    if (shape.style.opacity !== "0") shape.style.pointerEvents = "";
+    delete shape.dataset.gliding;
+    delete shape.dataset.glideAbort;
+  }
+  function step(now) {
+    if (shape.dataset.glideAbort) { finish(true); return; }
+    if (t0 === null) t0 = now;
+    const elapsed = now - t0;
+    let f, c;
+    if (elapsed < resizeMs) {                       // 1) se encoge en su lugar
+      f = 1 - (1 - k) * ease(elapsed / resizeMs);
+      c = pts[0];
+    } else if (elapsed < resizeMs + travelMs) {     // 2) viaja
+      const d = ease((elapsed - resizeMs) / travelMs) * total;
+      let seg = 1;
+      while (seg < lens.length - 1 && lens[seg] < d) seg++;
+      const segLen = lens[seg] - lens[seg - 1] || 1;
+      const g = Math.min(1, Math.max(0, (d - lens[seg - 1]) / segLen));
+      f = k;
+      c = { x: pts[seg - 1].x + (pts[seg].x - pts[seg - 1].x) * g, y: pts[seg - 1].y + (pts[seg].y - pts[seg - 1].y) * g };
+    } else {                                        // 3) vuelve a su tamaño
+      f = k + (1 - k) * ease((elapsed - resizeMs - travelMs) / resizeMs);
+      c = last;
+    }
+    if (k < 1) { shape.style.width = (w0 * f).toFixed(2) + "px"; shape.style.height = (h0 * f).toFixed(2) + "px"; }
+    shape.style.left = (c.x - (w0 * f) / 2).toFixed(2) + "px";
+    shape.style.top = (c.y - (h0 * f) / 2).toFixed(2) + "px";
+    if (elapsed < totalMs) requestAnimationFrame(step);
+    else finish();
+  }
+  requestAnimationFrame(step);
+}
+
+// Al tocar una burbuja: viaja hacia el lado contrario por un camino libre.
+// Si no hay camino posible (pantalla muy chica), se queda donde está.
+function sendShapeToOtherSide(shape) {
+  if (shape.dataset.gliding) return; // ya está viajando
+  const plan = planGlideRoute(shape, getKeepClearRects(true), getKeepClearRects(false));
+  if (!plan) return;
+  showShape(shape);
+  glideShape(shape, plan);
 }
 
 // Muestra/oculta la flechita de "sigue bajando" dentro de un panel,
@@ -322,7 +719,11 @@ document.addEventListener("keydown", (e) => {
     nextSlide();
     if (!isPausedByUser) startAutoPlay();
   } else if (e.key.toLowerCase() === "h") {
-    uiToggleBtn.click();
+    // El atajo "H" no debe actuar mientras se escribe en un campo (por ejemplo
+    // al teclear "Hola" o "Huila" en el formulario de Envíos) ni con un panel abierto.
+    const t = e.target;
+    const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    if (!typing && !document.querySelector(".overlay.active")) uiToggleBtn.click();
   }
 });
 
@@ -353,17 +754,29 @@ if (window.innerWidth <= 768) {
   slider.removeEventListener("mousemove", updateParallax);
 }
 
-// Clic directo sobre un círculo decorativo: lo manda a otra esquina al azar.
+// Clic (o toque) directo sobre un círculo decorativo: viaja al lado contrario de la pantalla.
 document.querySelectorAll(".parallax-shape").forEach(shape => {
   shape.addEventListener("click", function (e) {
     e.stopPropagation();
-    moveShapeToRandomPosition(this);
+    sendShapeToOtherSide(this);
   });
 });
 
 // Mueve los círculos solos cada 15 segundos (y una vez a los 5s de cargar).
 setInterval(autoMoveShapes, 15000);
 setTimeout(autoMoveShapes, 5000);
+
+// Al cargar y cada vez que cambia el tamaño de la ventana, se comprueba que las
+// burbujas no estén tapando nada (también cuando termina de cargar la tipografía,
+// porque cambia el alto de la descripción).
+settleShapes();
+window.addEventListener("load", settleShapes);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(settleShapes);
+let shapeResizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(shapeResizeTimer);
+  shapeResizeTimer = setTimeout(settleShapes, 200);
+});
 
 // Activa el indicador de scroll en todos los paneles.
 document.querySelectorAll(".overlay-content").forEach(handleScrollIndicator);
@@ -505,7 +918,7 @@ uiToggleBtn.addEventListener("click", (e) => {
    El número de WhatsApp de destino es el mismo que usan los
    demás botones de la página — si lo cambias en el HTML,
    cámbialo también aquí abajo (la constante NUMERO_WHATSAPP). */
-const NUMERO_WHATSAPP = "573000000000";
+const NUMERO_WHATSAPP = "573212122689";
 const shippingForm = document.getElementById("shippingForm");
 
 if (shippingForm) {
@@ -542,3 +955,291 @@ if (shippingForm) {
   });
 }
 
+
+/* ---------- 11. PREDICCIÓN DE DEPARTAMENTO Y CIUDAD (panel "Envíos") ----------
+   Mientras el cliente escribe en "Departamento" o en "Ciudad", aparece una
+   lista de sugerencias justo debajo del campo:
+     · Departamento → sugiere los 32 departamentos + Bogotá D.C. Pero si ya
+                      hay una ciudad elegida, sugiere SOLO los departamentos
+                      donde existe esa ciudad (Granada → Cundinamarca y Meta).
+                      Si el cliente escribe algo que no coincide con esos,
+                      muestra las sugerencias normales de lo que escribió.
+     · Ciudad       → si ya hay un departamento válido, solo sugiere las
+                      ciudades de ese departamento. Si no, sugiere de todos
+                      (mostrando el departamento al lado para distinguir, por
+                      ejemplo, Granada de Meta y de Cundinamarca). Elegir una
+                      ciudad NO rellena el departamento: eso lo elige el cliente.
+   La búsqueda ignora tildes y mayúsculas ("bogota" encuentra "Bogotá").
+   OJO: la lista de ciudades (COLOMBIA, aquí abajo) incluye las principales de
+   cada departamento, no los ~1.100 municipios. Los campos siguen siendo de
+   texto libre: si el cliente escribe una ciudad que no está, igual se envía.
+   Para agregar una ciudad: ponla en el arreglo de su departamento. */
+(function () {
+  const COLOMBIA = {
+    "Amazonas": ["Leticia", "Puerto Nariño"],
+    "Antioquia": ["Medellín", "Bello", "Itagüí", "Envigado", "Sabaneta", "La Estrella", "Caldas", "Copacabana", "Girardota", "Barbosa", "Rionegro", "Marinilla", "El Retiro", "La Ceja", "Guarne", "El Carmen de Viboral", "Santa Fe de Antioquia", "Apartadó", "Turbo", "Carepa", "Chigorodó", "Necoclí", "Caucasia", "Puerto Berrío", "Yarumal", "Santa Rosa de Osos", "Andes", "Jardín", "Jericó", "Támesis", "Sonsón", "Segovia", "Remedios", "Amagá", "Fredonia", "Urrao"],
+    "Arauca": ["Arauca", "Arauquita", "Saravena", "Tame", "Fortul", "Cravo Norte", "Puerto Rondón"],
+    "Atlántico": ["Barranquilla", "Soledad", "Malambo", "Sabanalarga", "Baranoa", "Puerto Colombia", "Galapa", "Santo Tomás", "Sabanagrande", "Palmar de Varela", "Luruaco", "Repelón", "Juan de Acosta", "Tubará"],
+    "Bogotá D.C.": ["Bogotá"],
+    "Bolívar": ["Cartagena", "Magangué", "Turbaco", "Arjona", "El Carmen de Bolívar", "Mompós", "San Juan Nepomuceno", "Santa Rosa del Sur", "San Jacinto", "Clemencia", "Mahates", "María la Baja", "Simití", "Villanueva", "Santa Catalina", "San Pablo"],
+    "Boyacá": ["Tunja", "Duitama", "Sogamoso", "Chiquinquirá", "Paipa", "Villa de Leyva", "Moniquirá", "Puerto Boyacá", "Samacá", "Garagoa", "Nobsa", "Tibasosa", "Ramiriquí", "Soatá", "Miraflores", "Guateque", "Monguí", "Aquitania"],
+    "Caldas": ["Manizales", "Villamaría", "Chinchiná", "La Dorada", "Riosucio", "Anserma", "Aguadas", "Salamina", "Supía", "Neira", "Palestina", "Viterbo", "Samaná"],
+    "Caquetá": ["Florencia", "San Vicente del Caguán", "Puerto Rico", "Belén de los Andaquíes", "Cartagena del Chairá", "El Doncello", "El Paujil", "La Montañita", "Morelia"],
+    "Casanare": ["Yopal", "Aguazul", "Villanueva", "Tauramena", "Paz de Ariporo", "Monterrey", "Maní", "Orocué", "Trinidad", "Sabanalarga"],
+    "Cauca": ["Popayán", "Santander de Quilichao", "Puerto Tejada", "Patía (El Bordo)", "Piendamó", "Silvia", "Guapi", "Timbío", "Miranda", "Corinto", "Caloto", "El Tambo", "Cajibío", "Páez (Belalcázar)"],
+    "Cesar": ["Valledupar", "Aguachica", "Agustín Codazzi", "Bosconia", "La Jagua de Ibirico", "Chimichagua", "Curumaní", "El Copey", "Pailitas", "San Alberto", "Pueblo Bello", "Chiriguaná", "Astrea"],
+    "Chocó": ["Quibdó", "Istmina", "Tadó", "Condoto", "Bahía Solano", "Nuquí", "Acandí", "Riosucio", "Bajo Baudó", "Unguía", "Lloró"],
+    "Córdoba": ["Montería", "Cereté", "Lorica", "Sahagún", "Planeta Rica", "Montelíbano", "Tierralta", "Ciénaga de Oro", "Puerto Libertador", "San Pelayo", "Ayapel", "Chinú", "Buenavista", "La Apartada", "San Andrés de Sotavento", "Canalete", "Los Córdobas", "Valencia"],
+    "Cundinamarca": ["Soacha", "Zipaquirá", "Facatativá", "Chía", "Cajicá", "Fusagasugá", "Girardot", "Mosquera", "Madrid", "Funza", "Sopó", "Tocancipá", "La Calera", "Cota", "Tenjo", "Tabio", "Ubaté", "Villeta", "Guaduas", "Sibaté", "Silvania", "Anapoima", "Ricaurte", "Nilo", "Villapinzón", "Choachí", "Gachancipá", "Nemocón", "Cogua", "Pacho", "Fómeque", "Une", "Chocontá", "Sesquilé", "Guasca", "Guatavita", "El Rosal", "Bojacá", "Zipacón", "Subachoque", "San Antonio del Tequendama", "La Mesa", "Tocaima", "Agua de Dios", "Arbeláez", "Pasca", "Útica", "Quebradanegra", "Caparrapí", "Granada", "Tibacuy"],
+    "Guainía": ["Inírida"],
+    "Guaviare": ["San José del Guaviare", "Calamar", "El Retorno", "Miraflores"],
+    "Huila": ["Neiva", "Pitalito", "Garzón", "La Plata", "Campoalegre", "Gigante", "Rivera", "Aipe", "Hobo", "Palermo", "Santa María", "Tesalia", "Timaná", "Yaguará", "Altamira", "Tello", "Baraya", "Íquira", "Isnos", "San Agustín", "Suaza"],
+    "La Guajira": ["Riohacha", "Maicao", "Uribia", "Fonseca", "San Juan del Cesar", "Villanueva", "Dibulla", "Albania", "Barrancas", "Hatonuevo", "El Molino", "Distracción", "Manaure"],
+    "Magdalena": ["Santa Marta", "Ciénaga", "Fundación", "El Banco", "Aracataca", "Zona Bananera (Sevilla)", "Plato", "Pivijay", "Santa Ana", "Guamal", "Remolino", "Algarrobo", "Pedraza", "Salamina", "Sitionuevo", "Tenerife"],
+    "Meta": ["Villavicencio", "Acacías", "Granada", "Puerto López", "Puerto Gaitán", "Restrepo", "Cumaral", "San Martín", "Guamal", "La Macarena", "Mesetas", "Uribe", "Puerto Lleras", "Barranca de Upía", "Cubarral", "El Castillo", "Fuente de Oro", "Lejanías", "Mapiripán", "Vista Hermosa", "San Juan de Arama"],
+    "Nariño": ["Pasto", "Ipiales", "Tumaco", "Túquerres", "La Unión", "Samaniego", "Sandoná", "Barbacoas", "Cumbal", "Guachucal", "La Cruz", "Consacá", "Taminango", "Tangua", "Yacuanquer", "Chachagüí", "Buesaco", "Funes", "Gualmatán", "Pupiales", "Cuaspud"],
+    "Norte de Santander": ["Cúcuta", "Ocaña", "Pamplona", "Villa del Rosario", "Los Patios", "Tibú", "Ábrego", "Convención", "El Zulia", "Chinácota", "Sardinata", "Toledo", "Cácota", "Teorama", "San Cayetano", "Villa Caro", "Bochalema", "Durania", "Herrán", "Lourdes", "Salazar", "Arboledas", "Gramalote", "Mutiscua"],
+    "Putumayo": ["Mocoa", "Puerto Asís", "Orito", "Valle del Guamuez (La Hormiga)", "Puerto Guzmán", "Sibundoy", "Villagarzón", "Colón", "San Francisco", "Santiago", "Puerto Caicedo", "Puerto Leguízamo", "San Miguel"],
+    "Quindío": ["Armenia", "Calarcá", "La Tebaida", "Montenegro", "Quimbaya", "Circasia", "Salento", "Filandia", "Génova", "Pijao", "Buenavista", "Córdoba"],
+    "Risaralda": ["Pereira", "Dosquebradas", "La Virginia", "Santa Rosa de Cabal", "Marsella", "Belén de Umbría", "Quinchía", "Apía", "Pueblo Rico", "Balboa", "Guática", "La Celia", "Mistrató", "Santuario"],
+    "San Andrés y Providencia": ["San Andrés", "Providencia"],
+    "Santander": ["Bucaramanga", "Floridablanca", "Girón", "Piedecuesta", "Barrancabermeja", "San Gil", "Socorro", "Barbosa", "Vélez", "Málaga", "Lebrija", "Rionegro", "Sabana de Torres", "Puerto Wilches", "Cimitarra", "Charalá", "Oiba", "Zapatoca", "Curití", "Aratoca", "Barichara", "Cepitá", "Los Santos", "Puente Nacional", "Suaita", "Villanueva", "Bolívar", "Landázuri", "Páramo", "Pinchote", "Mogotes", "Capitanejo", "Guadalupe", "Simacota"],
+    "Sucre": ["Sincelejo", "Corozal", "Sampués", "San Marcos", "Santiago de Tolú", "Coveñas", "San Onofre", "Majagual", "Sucre", "Los Palmitos", "Morroa", "Ovejas", "Palmito", "Galeras", "Guaranda", "Caimito", "Buenavista", "El Roble", "San Pedro"],
+    "Tolima": ["Ibagué", "Espinal", "Melgar", "Honda", "Chaparral", "Líbano", "Mariquita", "Fresno", "Guamo", "Flandes", "Ortega", "Purificación", "Rovira", "Cajamarca", "Armero", "Lérida", "Venadillo", "Ambalema", "Planadas", "Rioblanco", "Saldaña", "Natagaima", "Coello", "Carmen de Apicalá", "Alvarado", "Piedras", "Prado", "Dolores"],
+    "Valle del Cauca": ["Cali", "Palmira", "Buenaventura", "Tuluá", "Cartago", "Buga", "Jamundí", "Yumbo", "Candelaria", "Florida", "Pradera", "Sevilla", "Caicedonia", "Zarzal", "Roldanillo", "La Unión", "Obando", "Bolívar", "Ginebra", "Guacarí", "El Cerrito", "Dagua", "La Cumbre", "Restrepo", "Calima (Darién)", "Toro", "Argelia", "Bugalagrande", "Trujillo", "Riofrío", "Yotoco", "Vijes", "Andalucía", "San Pedro"],
+    "Vaupés": ["Mitú"],
+    "Vichada": ["Puerto Carreño", "La Primavera", "Santa Rosalía", "Cumaribo"]
+  };
+
+  const deptInput = document.getElementById("envioDepartamento");
+  const cityInput = document.getElementById("envioCiudad");
+  if (!deptInput || !cityInput) return;
+
+  // minúsculas y sin tildes, para que "bogota" encuentre "Bogotá"
+  const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+  const DEPTS = Object.keys(COLOMBIA).map((name) => ({ label: name, norm: norm(name) }));
+  const ALL_CITIES = [];
+  Object.entries(COLOMBIA).forEach(([dept, cities]) => {
+    cities.forEach((city) => ALL_CITIES.push({
+      label: city,
+      norm: norm(city),
+      base: norm(city.replace(/\s*\(.*\)\s*$/, "")), // "Patía (El Bordo)" también se reconoce como "Patía"
+      dept
+    }));
+  });
+
+  const findDept = (value) => DEPTS.find((d) => d.norm === norm(value)) || null;
+
+  // Departamentos donde existe la ciudad escrita en el campo Ciudad (puede ser más de uno: Granada)
+  function deptsOfCity() {
+    const n = norm(cityInput.value);
+    if (!n) return [];
+    const names = [];
+    ALL_CITIES.forEach((c) => {
+      if ((c.norm === n || c.base === n) && !names.includes(c.dept)) names.push(c.dept);
+    });
+    return DEPTS.filter((d) => names.includes(d.label));
+  }
+
+  // Ordena las coincidencias: primero las que EMPIEZAN con lo escrito,
+  // luego las que tienen una palabra que empieza así, y al final las que lo contienen.
+  function rank(items, q) {
+    const scored = [];
+    items.forEach((it, i) => {
+      const idx = it.norm.indexOf(q);
+      if (idx === -1) return;
+      const score = idx === 0 ? 0 : it.norm.charAt(idx - 1) === " " ? 1 : 2;
+      scored.push({ it, score, i });
+    });
+    scored.sort((a, b) => a.score - b.score || a.i - b.i);
+    return scored.map((s) => s.it);
+  }
+
+  // Convierte un <input> + su <ul class="ac-list"> en un campo con sugerencias.
+  //   getOptions(q) → lista de { label, sub?, ... } según lo escrito (q ya viene normalizado)
+  //   onPick(opción) → qué hacer cuando el cliente elige una
+  function setupAutocomplete(input, list, getOptions, onPick) {
+    let options = [];
+    let active = -1;
+
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", list.id);
+    input.setAttribute("aria-expanded", "false");
+
+    function close() {
+      list.hidden = true;
+      active = -1;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    }
+
+    function highlight(i) {
+      const items = list.children;
+      if (active >= 0 && items[active]) items[active].classList.remove("active");
+      active = i;
+      if (i >= 0 && items[i]) {
+        items[i].classList.add("active");
+        items[i].scrollIntoView({ block: "nearest" });
+        input.setAttribute("aria-activedescendant", items[i].id);
+      } else {
+        input.removeAttribute("aria-activedescendant");
+      }
+    }
+
+    function pick(i) {
+      if (!options[i]) return;
+      onPick(options[i]);
+      close();
+    }
+
+    function refresh() {
+      options = getOptions(norm(input.value));
+      // si lo escrito ya es exactamente la única sugerencia, no hace falta mostrarla
+      const q = norm(input.value);
+      if (!options.length || (options.length === 1 && q && norm(options[0].label) === q)) {
+        close();
+        return;
+      }
+      list.textContent = "";
+      options.forEach((opt, i) => {
+        const li = document.createElement("li");
+        li.className = "ac-item";
+        li.id = list.id + "-" + i;
+        li.setAttribute("role", "option");
+        const name = document.createElement("span");
+        name.textContent = opt.label;
+        li.appendChild(name);
+        if (opt.sub) {
+          const sub = document.createElement("small");
+          sub.textContent = opt.sub;
+          li.appendChild(sub);
+        }
+        li.addEventListener("mousedown", (e) => e.preventDefault()); // el campo no pierde el foco
+        li.addEventListener("click", () => pick(i));
+        list.appendChild(li);
+      });
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      active = -1;
+    }
+
+    input.addEventListener("input", refresh);
+    input.addEventListener("focus", refresh);
+    input.addEventListener("blur", () => setTimeout(close, 120));
+
+    input.addEventListener("keydown", (e) => {
+      const open = !list.hidden;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!open) refresh();
+        else highlight((active + 1) % options.length);
+      } else if (e.key === "ArrowUp" && open) {
+        e.preventDefault();
+        highlight((active - 1 + options.length) % options.length);
+      } else if (e.key === "Enter" && open && active >= 0) {
+        e.preventDefault(); // elige la sugerencia en vez de enviar el formulario
+        pick(active);
+      } else if (e.key === "Escape" && open) {
+        e.stopPropagation(); // cierra solo las sugerencias, no el panel completo
+        close();
+      } else if (e.key === "Tab") {
+        close();
+      }
+    });
+  }
+
+  // Departamento: los de la ciudad elegida; si no hay ciudad, todos (o los que coincidan con lo escrito)
+  setupAutocomplete(
+    deptInput,
+    document.getElementById("acListDepartamento"),
+    (q) => {
+      const mine = deptsOfCity();
+      let list;
+      if (mine.length) {
+        // hay ciudad: primero los departamentos de esa ciudad...
+        if (!q) list = mine;
+        else {
+          const hits = rank(mine, q);
+          // ...y si lo escrito no coincide con ninguno, las sugerencias normales de lo escrito
+          list = hits.length ? hits : rank(DEPTS, q).slice(0, 10);
+        }
+      } else {
+        list = q ? rank(DEPTS, q).slice(0, 10) : DEPTS;
+      }
+      return list.map((d) => ({ label: d.label }));
+    },
+    (opt) => { deptInput.value = opt.label; }
+  );
+
+  // Ciudad: solo las del departamento escrito; si no hay, de todos
+  setupAutocomplete(
+    cityInput,
+    document.getElementById("acListCiudad"),
+    (q) => {
+      const dept = findDept(deptInput.value);
+      const pool = dept ? ALL_CITIES.filter((c) => c.dept === dept.label) : ALL_CITIES;
+      const found = q ? rank(pool, q).slice(0, 10) : dept ? pool.slice(0, 12) : [];
+      return found.map((c) => ({ label: c.label, dept: c.dept, sub: dept ? "" : c.dept }));
+    },
+    (opt) => {
+      // solo se escribe la ciudad: el departamento NO se toca, lo elige el cliente
+      cityInput.value = opt.label;
+    }
+  );
+})();
+
+/* ---------- 12. OCULTAR EL OJITO MIENTRAS HAY UN PANEL ABIERTO ----------
+   El botón del ojito (ocultar/mostrar la interfaz) solo tiene sentido en la
+   pantalla principal, la de las fotos. Cuando se abre cualquier panel (Quiénes
+   somos, Kit, Manual, Galería, Envíos, Preguntas) se oculta, y reaparece al
+   cerrarlo. Un MutationObserver vigila la clase "active" de todos los .overlay
+   y le pone la clase "overlay-open" al <body>; el CSS
+   (body.overlay-open .ui-toggle-btn) hace el resto. Así funciona sin importar
+   cómo se abra o se cierre el panel (botón ×, clic afuera, tecla Escape...). */
+(function () {
+  const overlays = document.querySelectorAll(".overlay");
+  function sync() {
+    const anyOpen = Array.from(overlays).some((o) => o.classList.contains("active"));
+    document.body.classList.toggle("overlay-open", anyOpen);
+  }
+  const observer = new MutationObserver(sync);
+  overlays.forEach((o) => observer.observe(o, { attributes: true, attributeFilter: ["class"] }));
+  sync();
+})();
+
+/* ---------- 13. BARRA DE PROGRESO CENTRADA SOBRE LOS BOTONES −, 5s, + ----------
+   La barra de tiempo (la rayita) queda centrada, de lado a lado, justo encima de
+   los botones de segundos. En vez de calcular números a mano para cada tamaño
+   de pantalla, aquí se mide dónde están realmente los botones y se centra la
+   barra sobre ellos. Se repite al cargar, al cambiar el tamaño de la ventana y
+   si los botones cambian de ancho. (El "left" del CSS es solo un respaldo.) */
+(function () {
+  const controls = document.querySelector(".duration-controls");
+  const bar = document.querySelector(".progress-bar-container");
+  if (!controls || !bar) return;
+
+  function centerBar() {
+    const c = controls.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    if (!c.width || !b.width) return;
+    bar.style.left = (c.left + (c.width - b.width) / 2).toFixed(2) + "px";
+  }
+
+  centerBar();
+  window.addEventListener("load", centerBar);
+  window.addEventListener("resize", centerBar);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(centerBar);
+  if (window.ResizeObserver) new ResizeObserver(centerBar).observe(controls);
+})();
+
+/* ---------- 14. LETRAS TEMPORALES DE LAS VENTANAS DE FOTO ----------
+   Las ventanas de foto (la flotante de cada diapositiva y las 3 del panel Kit) traen
+   letras temporales: ícono de cámara, nombre y "Foto — reemplaza por tu imagen real".
+   En cuanto a una ventana le pones un <img> adentro, aquí se le marca la clase
+   "has-photo" y el CSS esconde esas letras solas y deja la foto llenando la ventana.
+   No hay que borrar nada del HTML: basta con agregar el <img>. */
+document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) => {
+  if (box.querySelector(":scope > img")) box.classList.add("has-photo");
+});
