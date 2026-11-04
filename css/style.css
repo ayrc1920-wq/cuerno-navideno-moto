@@ -2110,3 +2110,16 @@ header .titulo-navideno {
 
 /* Botones .buy-btn: el texto siempre centrado, también cuando se parte en dos líneas. */
 .buy-btn { text-align: center; }
+
+/* Foto de la nariz: son dos vistas lado a lado. En pantallas angostas la ventana es casi cuadrada
+   y recortaría el centro (partiendo la imagen), así que en celular se usa una versión solo con la vista de frente (nariz-reno-moto-movil.jpg). */
+@media (max-width: 768px) {
+	.has-photo > img.foto-nariz { display: none; }
+}
+@media (min-width: 769px) {
+	.has-photo > img.foto-nariz-movil { display: none; }
+}
+
+/* Foto de "Tu moto, lista para diciembre": "20%" decide qué franja de la foto se ve cuando la ventana
+   es más ancha que la foto (0% = arriba del todo, 100% = abajo). */
+.has-photo > img.foto-vertical { object-position: 50% 20%; }
