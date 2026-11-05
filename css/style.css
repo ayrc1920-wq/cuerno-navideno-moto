@@ -2120,6 +2120,6 @@ header .titulo-navideno {
 	.has-photo > img.foto-nariz-movil { display: none; }
 }
 
-/* Foto de "Tu moto, lista para diciembre": "20%" decide qué franja de la foto se ve cuando la ventana
+/* Foto de "Tu moto, lista para diciembre": "15%" decide qué franja de la foto se ve cuando la ventana
    es más ancha que la foto (0% = arriba del todo, 100% = abajo). */
-.has-photo > img.foto-vertical { object-position: 50% 20%; }
+.has-photo > img.foto-vertical { object-position: 50% 15%; }
