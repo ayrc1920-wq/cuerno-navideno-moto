@@ -389,7 +389,26 @@
     der.appendChild(el("em", "ref-sello", "¡Precio especial!"));
     c.appendChild(der);
     const fin = $("#refSub");
-    if (fin) fin.textContent = camp.abierta ? "Campaña navideña · hasta el " + fechaCorta(camp.fin) : "La campaña ya terminó. ¡Gracias por participar!";
+    if (fin) fin.textContent = camp.abierta ? "Campaña navideña" : "La campaña ya terminó. ¡Gracias por participar!";
+    iniciarCuenta(camp.abierta ? camp.fin : null);
+  }
+
+  // Cuenta regresiva hasta el fin de la campaña (cuadros rojos bajo "Campaña navideña")
+  let cuentaTimer = null;
+  function iniciarCuenta(finIso) {
+    const caja = $("#refCuenta"); if (!caja) return;
+    if (cuentaTimer) { clearInterval(cuentaTimer); cuentaTimer = null; }
+    const fin = finIso ? new Date(finIso).getTime() : NaN;
+    if (isNaN(fin) || fin <= Date.now()) { caja.hidden = true; return; }
+    const pon = (u, v) => { const n = caja.querySelector('[data-u="' + u + '"]'); if (n) n.textContent = String(v).padStart(2, "0"); };
+    const tick = () => {
+      let t = Math.floor((fin - Date.now()) / 1000);
+      if (t <= 0) { caja.hidden = true; clearInterval(cuentaTimer); cuentaTimer = null; return; }
+      pon("d", Math.floor(t / 86400)); pon("h", Math.floor(t % 86400 / 3600));
+      pon("m", Math.floor(t % 3600 / 60)); pon("s", t % 60);
+    };
+    tick(); caja.hidden = false;
+    cuentaTimer = setInterval(tick, 1000);
   }
 
   function pintarEstado() {

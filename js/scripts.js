@@ -1243,3 +1243,24 @@ if (shippingForm) {
 document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) => {
   if (box.querySelector(":scope > img")) box.classList.add("has-photo");
 });
+
+/* ---------- 15. FOTOS DEL PANEL KIT AMPLIABLES ----------
+   Al tocar una de las 3 fotos del panel "El Kit" se abre ampliada sobre toda la pantalla.
+   Se cierra tocando la imagen, la X o con la tecla Esc. */
+(function () {
+  const box = document.getElementById("kitLightbox");
+  if (!box) return;
+  const big = box.querySelector("img");
+  const close = () => { box.hidden = true; big.src = ""; };
+  document.querySelectorAll(".kit-part-photo > img").forEach((img) => {
+    const wrap = img.parentElement;
+    wrap.setAttribute("tabindex", "0");
+    wrap.setAttribute("role", "button");
+    wrap.setAttribute("aria-label", "Ampliar foto: " + img.alt);
+    const open = () => { big.src = img.currentSrc || img.src; big.alt = img.alt; box.hidden = false; };
+    wrap.addEventListener("click", open);
+    wrap.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  });
+  box.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !box.hidden) close(); });
+})();
