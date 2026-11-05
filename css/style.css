@@ -2123,3 +2123,28 @@ header .titulo-navideno {
 /* Foto de "Tu moto, lista para diciembre": "15%" decide qué franja de la foto se ve cuando la ventana
    es más ancha que la foto (0% = arriba del todo, 100% = abajo). */
 .has-photo > img.foto-vertical { object-position: 50% 15%; }
+
+/* ---- Ventana de video del panel Kit (16:9) ----
+   Es un recuadro temporal hasta que se le pone un video (ver index.html, ".kit-video-card").
+   Con video, el reproductor llena la ventana sin recortarlo (así sirve también un video vertical). */
+.kit-video-ventana {
+	aspect-ratio: 16/9;
+	background: #000;
+	border-bottom: 1px dashed rgba(255, 255, 255, 0.22);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 16px;
+	text-align: center;
+}
+.kit-video-ventana svg { width: 44px; height: 44px; opacity: 0.65; }
+.kit-video-ventana.tiene-video { padding: 0; border-bottom-style: solid; }
+.kit-video-ventana video {
+	width: 100%;
+	height: 100%;
+	display: block;
+	object-fit: contain;
+	background: #000;
+}
