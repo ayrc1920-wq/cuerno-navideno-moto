@@ -2123,3 +2123,65 @@ header .titulo-navideno {
 /* Foto de "Tu moto, lista para diciembre": "15%" decide qué franja de la foto se ve cuando la ventana
    es más ancha que la foto (0% = arriba del todo, 100% = abajo). */
 .has-photo > img.foto-vertical { object-position: 50% 15%; }
+
+/* ---- Fotos del panel El Kit: se pueden tocar para verlas ampliadas ---- */
+.kit-part-photo.has-photo { cursor: zoom-in; }
+.kit-lightbox {
+	position: fixed; inset: 0; z-index: 20000;
+	display: flex; align-items: center; justify-content: center;
+	background: rgba(0,0,0,0.92); padding: 16px; cursor: zoom-out;
+}
+.kit-lightbox[hidden] { display: none; }
+.kit-lightbox img {
+	max-width: 100%; max-height: 100%; object-fit: contain;
+	border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.kit-lightbox__close {
+	position: absolute; top: 14px; right: 14px; width: 44px; height: 44px;
+	border-radius: 50%; border: 1px solid rgba(255,255,255,0.3);
+	background: rgba(0,0,0,0.5); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer;
+}
+
+/* ---- Pantalla casi cuadrada (ventana de tablet o computador angosta, hasta 768px de ancho) ----
+   La ventana de la foto crece en altura y ocupa el espacio que quedaba vacío entre ella y el
+   recuadro de la descripción. La descripción baja un poco; los controles y el pie de página
+   quedan donde estaban. Celulares verticales y pantallas anchas no cambian.
+   - top: 112px = justo debajo del encabezado.
+   - 100dvh - 330px = deja abajo lo que ocupan la descripción (hasta 2 líneas), los puntos y los
+     controles. Si quieres la foto más alta o más baja, cambia ese 330px. */
+@media (max-width: 768px) and (min-aspect-ratio: 7/10) and (max-aspect-ratio: 13/10) {
+	.photo-placeholder {
+		top: 112px;
+		transform: translateX(-50%);
+		height: calc(100vh - 330px);
+		height: calc(100dvh - 330px);
+		min-height: 240px;
+	}
+	.image-info { bottom: 72px; }
+}
+
+/* ============================================================
+   CELULAR ACOSTADO (pantalla horizontal de hasta 500px de alto)
+   La pantalla principal se hace más alta que la ventana y se puede deslizar hacia arriba y
+   abajo para ver la foto y la descripción completas. La barra de desplazamiento NO se ve.
+   El menú, los controles, los puntos y los botones flotantes se quedan fijos en su lugar.
+   Tablets, escritorio y celular vertical no cambian.
+   - 560px = alto total de la pantalla principal (foto + descripción). Si la quieres más alta
+     o más baja, cambia ese número.
+   ============================================================ */
+@media (orientation: landscape) and (max-height: 500px) {
+	html { overflow-x: hidden; overflow-y: auto; height: auto; scrollbar-width: none; -ms-overflow-style: none; }
+	body { overflow: visible; height: auto; }
+	html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+	.slider-wrapper { height: 560px; }
+	.photo-placeholder {
+		top: 96px;
+		width: min(88vw, 760px);
+		max-width: none;
+		height: 270px;
+		max-height: none;
+		aspect-ratio: auto;
+		transform: translateX(-50%);
+	}
+	.image-info { bottom: 80px; }
+}

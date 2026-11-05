@@ -477,3 +477,15 @@ body.ref-aviso-on .ref-btn { display: none; }
 /* Enlace "Cerrar sesión" */
 #referidosOverlay .ref-salir { display: block; margin: 14px auto 0; padding: 4px 8px; border: 0; background: none; color: #bdbdbd; font: inherit; font-size: 0.78rem; text-decoration: underline; cursor: pointer; word-break: break-all; }
 #referidosOverlay .ref-salir:hover { color: #fff; }
+
+/* Cuenta regresiva: cuadros rojos con marco rojizo, bajo "Campaña navideña" */
+.ref-cuenta { display: flex; gap: 6px; margin: 10px 0 0; }
+.ref-cuenta[hidden] { display: none; }
+.ref-cuenta-caja {
+  width: 46px; padding: 6px 0 5px; text-align: center; border-radius: 8px;
+  background: linear-gradient(135deg, rgba(120, 0, 18, 0.75), rgba(40, 0, 8, 0.85));
+  border: 1.5px solid rgba(214, 0, 28, 0.75);
+  box-shadow: inset 0 0 12px rgba(214, 0, 28, 0.2), 0 0 10px rgba(214, 0, 28, 0.18);
+}
+.ref-cuenta-caja b { display: block; font-size: 1.05rem; line-height: 1.1; color: #fff; font-variant-numeric: tabular-nums; }
+.ref-cuenta-caja small { display: block; margin-top: 2px; font-size: 0.55rem; letter-spacing: 0.05em; text-transform: uppercase; color: #ffb3bb; }
