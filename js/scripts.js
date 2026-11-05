@@ -1243,3 +1243,34 @@ if (shippingForm) {
 document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) => {
   if (box.querySelector(":scope > img")) box.classList.add("has-photo");
 });
+
+/* ---------- 15. VIDEO DEL PANEL KIT ----------
+   La tarjeta ".kit-video-card" (index.html) trae un recuadro temporal. Cuando se le escribe la ruta
+   del video en data-video (y opcionalmente la portada en data-poster), aquí se arma el reproductor
+   con su imagen de portada (poster). El video no se descarga hasta que la persona le da play, para
+   no gastar sus datos. También se pausa solo al cerrar el panel. */
+(function () {
+  document.querySelectorAll(".kit-video-card").forEach((card) => {
+    const src = (card.dataset.video || "").trim();
+    if (!src) return;
+    const ventana = card.querySelector(".kit-video-ventana");
+    if (!ventana) return;
+    const v = document.createElement("video");
+    v.controls = true;
+    v.playsInline = true;
+    v.preload = "none";
+    const poster = (card.dataset.poster || "").trim();
+    if (poster) v.poster = poster;
+    v.src = src;
+    v.setAttribute("aria-label", "Video del kit de cuernos navideños");
+    ventana.textContent = "";
+    ventana.classList.add("tiene-video");
+    ventana.appendChild(v);
+
+    const panel = card.closest(".overlay");
+    if (panel && window.MutationObserver) {
+      new MutationObserver(() => { if (!panel.classList.contains("active")) v.pause(); })
+        .observe(panel, { attributes: true, attributeFilter: ["class"] });
+    }
+  });
+})();
