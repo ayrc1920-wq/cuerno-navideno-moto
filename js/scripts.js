@@ -176,11 +176,18 @@ function closeOverlay(name) {
   document.getElementById(name + "Overlay").classList.remove("active");
   if (!isPausedByUser) startAutoPlay(); // reanuda el slider de fondo
 
-  // en vez de quedar mirando la pantalla de inicio, reabrimos el menú
-  // para que el usuario pueda entrar directo a otra sección
+  // En el celular, al cerrar un panel del menú se reabre el menú ☰ para poder entrar
+  // directo a otra sección. EXCEPCIÓN: el panel de la campaña ("referidos") no se abre
+  // desde el menú, así que al salir de él el menú se queda CERRADO hasta que el
+  // usuario toque el ícono ☰.
   if (window.innerWidth <= 768) {
-    menuToggle.classList.add("active");
-    mainNav.classList.add("active");
+    if (name === "referidos") {
+      menuToggle.classList.remove("active");
+      mainNav.classList.remove("active");
+    } else {
+      menuToggle.classList.add("active");
+      mainNav.classList.add("active");
+    }
   }
 }
 
@@ -1263,4 +1270,60 @@ document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) =
   });
   box.addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !box.hidden) close(); });
+})();
+
+/* ---------- 16. BOTÓN "ATRÁS" DEL CELULAR / TABLET ----------
+   Antes, al oprimir "atrás" del dispositivo con un panel abierto, se salía de toda la
+   página. Ahora cada panel (y la foto ampliada del Kit) agrega un paso al historial del
+   navegador cuando se abre, así "atrás" hace lo mismo que tocar la ×: cierra el panel y
+   te deja en la página. Con ningún panel abierto, "atrás" funciona normal.
+   Un MutationObserver vigila los paneles, así funciona sin importar cómo se abran o
+   se cierren (×, clic afuera, tecla Escape, o el botón atrás). */
+(function () {
+  const overlays = Array.from(document.querySelectorAll(".overlay"));
+  const lightbox = document.getElementById("kitLightbox");
+  let panelEntry = false;   // ¿hay un paso del historial por un panel abierto?
+  let lbEntry = false;      // ¿hay un paso del historial por la foto ampliada?
+  let ignorar = 0;          // popstate provocados por nosotros mismos (no son del usuario)
+
+  const panelAbierto = () => overlays.some((o) => o.classList.contains("active"));
+  const lbAbierto = () => lightbox && !lightbox.hidden;
+  const atras = () => { ignorar++; history.back(); };
+
+  function syncPaneles() {
+    if (panelAbierto() && !panelEntry) {
+      history.pushState({ panel: true }, "");
+      panelEntry = true;
+    } else if (!panelAbierto() && panelEntry) {
+      panelEntry = false;
+      atras();
+    }
+  }
+  function syncLightbox() {
+    if (lbAbierto() && !lbEntry) {
+      history.pushState({ foto: true }, "");
+      lbEntry = true;
+    } else if (!lbAbierto() && lbEntry) {
+      lbEntry = false;
+      atras();
+    }
+  }
+
+  const obsPaneles = new MutationObserver(syncPaneles);
+  overlays.forEach((o) => obsPaneles.observe(o, { attributes: true, attributeFilter: ["class"] }));
+  if (lightbox) new MutationObserver(syncLightbox).observe(lightbox, { attributes: true, attributeFilter: ["hidden"] });
+
+  window.addEventListener("popstate", () => {
+    if (ignorar > 0) { ignorar--; return; }
+    if (lbEntry && lbAbierto()) {            // 1º se cierra la foto ampliada
+      lbEntry = false;
+      lightbox.click();
+      return;
+    }
+    if (panelEntry && panelAbierto()) {      // luego el panel (igual que tocar la ×)
+      panelEntry = false;
+      overlays.filter((o) => o.classList.contains("active"))
+              .forEach((o) => closeOverlay(o.id.replace(/Overlay$/, "")));
+    }
+  });
 })();
