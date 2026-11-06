@@ -2185,3 +2185,22 @@ header .titulo-navideno {
 	}
 	.image-info { bottom: 80px; }
 }
+
+/* ---- Menú ☰ del celular: scroll invisible ----
+   Con el celular acostado la pantalla es baja y la lista del menú (Quiénes somos, Kit,
+   Manual, Galería, Envíos, Preguntas y el botón de pantalla completa) no cabía. Ahora la
+   lista nunca es más alta que lo que queda debajo del encabezado y se desliza hacia arriba
+   y abajo con el dedo, SIN barra de desplazamiento visible.
+   - 100px = alto aproximado del encabezado; ajústalo si cambias el encabezado. */
+@media (max-width: 768px) {
+	nav {
+		max-height: calc(100vh - 100px);
+		max-height: calc(100dvh - 100px);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+	}
+	nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
