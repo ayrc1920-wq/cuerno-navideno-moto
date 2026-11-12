@@ -1273,35 +1273,45 @@ document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) =
 })();
 
 /* ---------- 16. BOTÓN "ATRÁS" DEL CELULAR / TABLET ----------
-   Antes, al oprimir "atrás" del dispositivo con un panel abierto, se salía de toda la
-   página. Ahora cada panel (y la foto ampliada del Kit) agrega un paso al historial del
-   navegador cuando se abre, así "atrás" hace lo mismo que tocar la ×: cierra el panel y
-   te deja en la página. Con ningún panel abierto, "atrás" funciona normal.
-   Un MutationObserver vigila los paneles, así funciona sin importar cómo se abran o
-   se cierren (×, clic afuera, tecla Escape, o el botón atrás). */
+   Antes, al oprimir "atrás" del dispositivo con el menú ☰ o un panel abierto, se salía de
+   toda la página. Ahora el menú ☰ (solo en celular), cada panel y la foto ampliada del Kit
+   agregan un paso al historial del navegador cuando se abren. Así "atrás" hace lo mismo
+   que cerrarlos con la mano:
+     · foto ampliada abierta  → la cierra
+     · panel abierto          → lo cierra (igual que la ×)
+     · solo el menú ☰ abierto → lo cierra y te deja en la pantalla principal
+     · nada abierto           → "atrás" funciona normal (sale de la página)
+   El menú y los paneles comparten UN solo paso del historial ("capa"), porque se pasa de
+   uno a otro (menú → panel → menú) sin que la página cambie. Un MutationObserver vigila
+   las clases, así funciona sin importar cómo se abran o se cierren (×, clic afuera, tecla
+   Escape, o el botón atrás). */
 (function () {
   const overlays = Array.from(document.querySelectorAll(".overlay"));
   const lightbox = document.getElementById("kitLightbox");
-  let panelEntry = false;   // ¿hay un paso del historial por un panel abierto?
+  const nav = document.getElementById("mainNav");
+  const toggle = document.getElementById("menuToggle");
+  let capaEntry = false;    // ¿hay un paso del historial por el menú o un panel abierto?
   let lbEntry = false;      // ¿hay un paso del historial por la foto ampliada?
   let ignorar = 0;          // popstate provocados por nosotros mismos (no son del usuario)
 
   const panelAbierto = () => overlays.some((o) => o.classList.contains("active"));
+  const menuAbierto = () => !!(nav && nav.classList.contains("active"));
+  const hayCapa = () => panelAbierto() || menuAbierto();
   const lbAbierto = () => lightbox && !lightbox.hidden;
   const atras = () => { ignorar++; history.back(); };
 
-  function syncPaneles() {
-    if (panelAbierto() && !panelEntry) {
-      history.pushState({ panel: true }, "");
-      panelEntry = true;
-    } else if (!panelAbierto() && panelEntry) {
-      panelEntry = false;
+  function syncCapa() {
+    if (hayCapa() && !capaEntry) {
+      history.pushState({ capa: true }, "", "#menu");
+      capaEntry = true;
+    } else if (!hayCapa() && capaEntry) {
+      capaEntry = false;
       atras();
     }
   }
   function syncLightbox() {
     if (lbAbierto() && !lbEntry) {
-      history.pushState({ foto: true }, "");
+      history.pushState({ foto: true }, "", "#foto");
       lbEntry = true;
     } else if (!lbAbierto() && lbEntry) {
       lbEntry = false;
@@ -1309,8 +1319,17 @@ document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) =
     }
   }
 
-  const obsPaneles = new MutationObserver(syncPaneles);
-  overlays.forEach((o) => obsPaneles.observe(o, { attributes: true, attributeFilter: ["class"] }));
+  // Al recargar la página con un "#menu" o "#foto" pegado en el enlace, se limpia (los
+  // paneles no se reabren solos). Cada paso del historial lleva su propio "#...": así los
+  // navegadores dentro de apps (Facebook, Instagram, WhatsApp) sí lo cuentan como página
+  // distinta y "atrás" no los saca del sitio.
+  if (location.hash === "#menu" || location.hash === "#foto") {
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+
+  const obs = new MutationObserver(syncCapa);
+  overlays.forEach((o) => obs.observe(o, { attributes: true, attributeFilter: ["class"] }));
+  if (nav) obs.observe(nav, { attributes: true, attributeFilter: ["class"] });
   if (lightbox) new MutationObserver(syncLightbox).observe(lightbox, { attributes: true, attributeFilter: ["hidden"] });
 
   window.addEventListener("popstate", () => {
@@ -1320,10 +1339,18 @@ document.querySelectorAll(".photo-placeholder, .kit-part-photo").forEach((box) =
       lightbox.click();
       return;
     }
-    if (panelEntry && panelAbierto()) {      // luego el panel (igual que tocar la ×)
-      panelEntry = false;
-      overlays.filter((o) => o.classList.contains("active"))
-              .forEach((o) => closeOverlay(o.id.replace(/Overlay$/, "")));
+    if (capaEntry && hayCapa()) {
+      capaEntry = false;                     // este paso del historial ya se consumió
+      const abiertos = overlays.filter((o) => o.classList.contains("active"));
+      if (abiertos.length) {
+        // un panel abierto: se cierra igual que con la × (en celular reabre el menú ☰,
+        // salvo el panel de la campaña; eso lo decide closeOverlay)
+        abiertos.forEach((o) => closeOverlay(o.id.replace(/Overlay$/, "")));
+      } else {
+        // solo el menú ☰ abierto: se cierra y quedas en la pantalla principal
+        if (nav) nav.classList.remove("active");
+        if (toggle) toggle.classList.remove("active");
+      }
     }
   });
 })();
