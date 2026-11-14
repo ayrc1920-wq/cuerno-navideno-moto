@@ -489,3 +489,6 @@ body.ref-aviso-on .ref-btn { display: none; }
 }
 .ref-cuenta-caja b { display: block; font-size: 1.05rem; line-height: 1.1; color: #fff; font-variant-numeric: tabular-nums; }
 .ref-cuenta-caja small { display: block; margin-top: 2px; font-size: 0.55rem; letter-spacing: 0.05em; text-transform: uppercase; color: #ffb3bb; }
+
+/* Panel de campaña: la X también queda fija al desplazar */
+#referidosOverlay .close-btn { --d: 40px; --pad: 0px; position: sticky; top: 12px; right: auto; margin: 14px 14px -54px auto; }
