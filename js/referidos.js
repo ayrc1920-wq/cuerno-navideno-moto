@@ -57,7 +57,7 @@
   // Imita lo que hará la base de datos real, con los mismos nombres de datos,
   // para poder ver y probar el diseño sin conexión.
   function crearApiDemo() {
-    const camp = { meta: 6, max_recompensas: 3, precio_lista: 75000, precio_con_descuento: 55000,
+    const camp = { meta: 6, max_recompensas: 3, precio_lista: 70000, precio_con_descuento: 55000,
                    fin: "2026-12-15T23:59:59-05:00", abierta: true };
     const d = { sesion: null, part: null, validas: 0, pend: 0, premios: [] };
     const azar = (n) => { const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = ""; for (let i = 0; i < n; i++) s += a[Math.floor(Math.random() * 32)]; return s; };
